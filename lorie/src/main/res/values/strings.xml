@@ -54,6 +54,8 @@ E.g. <b>META</b> for <i>META key</i>, \n
     <string name="lorie_pref_PIP_summary">Show app in picture-in-picture mode when home button or recents button is pressed</string>
     <string name="lorie_pref_fullscreen">Fullscreen</string>
     <string name="lorie_pref_fullscreen_summary">Toggle immersive mode in your device display</string>
+    <string name="lorie_pref_transparentCaption">Draw under the window title bar</string>
+    <string name="lorie_pref_transparentCaption_summary">Makes the desktop title bar transparent and lets the X screen use the whole window. The window buttons stay drawn on top of it.</string>
     <string name="lorie_pref_forceOrientation">Screen orientation</string>
     <string name="lorie_pref_hideCutout">Hide display cutout (if any)</string>
     <string name="lorie_pref_screenIdleTimeout">Screen idle timeout</string>

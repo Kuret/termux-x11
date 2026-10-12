@@ -124,7 +124,7 @@ public class MainActivity extends AppCompatActivity {
     public Prefs prefs;
     LorieApp app;
 
-    private boolean oldFullscreen = false, oldHideCutout = false;
+    private boolean oldFullscreen = false, oldHideCutout = false, oldUnderCaption = false;
     private OrientationEventListener orientationListener;
 
     ViewTreeObserver.OnPreDrawListener mOnPredrawListener = new ViewTreeObserver.OnPreDrawListener() {
@@ -400,6 +400,7 @@ public class MainActivity extends AppCompatActivity {
             prefs.touchMode.put("1");
 
         oldFullscreen = prefs.fullscreen.get();
+        oldUnderCaption = drawsUnderCaption();
         oldHideCutout = prefs.hideCutout.get();
 
         requestWindowFeature(Window.FEATURE_NO_TITLE);
@@ -1116,13 +1117,38 @@ public class MainActivity extends AppCompatActivity {
         checkScreenIdleTimeout();
     }
 
+    /**
+     * Whether this window should extend under the desktop title bar instead of starting below it.
+     *
+     * A freeform window on Samsung DeX carries a title bar drawn by the system, and an app cannot
+     * remove it. Android 15 does let an app ask for its background to be transparent, after which
+     * the system draws only the handle on the left and the window buttons on the right, over
+     * whatever the app itself puts there. Chrome uses this to seat its toolbar on the title bar
+     * row; here it gives the X screen the full height of the window.
+     *
+     * Only in multi-window mode, because that is where the title bar exists; a fullscreen window
+     * would just end up underneath the status bar.
+     */
+    private boolean drawsUnderCaption() {
+        return prefs.transparentCaption.get()
+                && SDK_INT >= VERSION_CODES.VANILLA_ICE_CREAM
+                && !prefs.fullscreen.get()
+                && isInMultiWindowMode();
+    }
+
     private void applyImmersiveMode() {
         boolean isFullscreen = prefs.fullscreen.get();
+        boolean underCaption = drawsUnderCaption();
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            getWindow().setDecorFitsSystemWindows(!isFullscreen);
+            getWindow().setDecorFitsSystemWindows(!isFullscreen && !underCaption);
             WindowInsetsController controller = getWindow().getInsetsController();
             if (controller != null) {
+                if (SDK_INT >= VERSION_CODES.VANILLA_ICE_CREAM)
+                    controller.setSystemBarsAppearance(
+                            underCaption ? WindowInsetsController.APPEARANCE_TRANSPARENT_CAPTION_BAR_BACKGROUND : 0,
+                            WindowInsetsController.APPEARANCE_TRANSPARENT_CAPTION_BAR_BACKGROUND);
+
                 if (!isFullscreen)
                     controller.show(WindowInsets.Type.systemBars());
                 else {
@@ -1189,9 +1215,12 @@ public class MainActivity extends AppCompatActivity {
         Window window = getWindow();
         boolean fullscreen = prefs.fullscreen.get();
         boolean hideCutout = prefs.hideCutout.get();
+        boolean underCaption = drawsUnderCaption();
 
         // Recreating would take the window out of picture-in-picture, so it waits for the normal size.
-        if (!isInPictureInPictureMode && (oldHideCutout != hideCutout || oldFullscreen != fullscreen)) {
+        if (!isInPictureInPictureMode && (oldHideCutout != hideCutout || oldFullscreen != fullscreen
+                || oldUnderCaption != underCaption)) {
+            oldUnderCaption = underCaption;
             oldHideCutout = hideCutout;
             oldFullscreen = fullscreen;
             // For some reason cutout or fullscreen change makes layout calculations wrong and invalid.
@@ -1238,9 +1267,17 @@ public class MainActivity extends AppCompatActivity {
         applyScreenIdleTimeout();
         applyImmersiveMode();
 
+        // Drawn under the title bar the X picture has to sit above the window surface: the system
+        // composites the title bar strip over that surface only, and this SurfaceView punches a
+        // transparent hole in it, so the strip came out opaque black over the top of the Linux
+        // screen. The cost is that the extra key bar and the mouse helpers go behind the picture,
+        // which is why this follows the preference rather than being on always.
+        getLorieView().setZOrderOnTop(underCaption);
+
         View contentChild = ((FrameLayout) findViewById(android.R.id.content)).getChildAt(0);
-        if (contentChild.getFitsSystemWindows() == fullscreen) {
-            contentChild.setFitsSystemWindows(!fullscreen);
+        boolean fitsSystemWindows = !fullscreen && !drawsUnderCaption();
+        if (contentChild.getFitsSystemWindows() != fitsSystemWindows) {
+            contentChild.setFitsSystemWindows(fitsSystemWindows);
             ViewCompat.requestApplyInsets(contentChild);
         }
     }

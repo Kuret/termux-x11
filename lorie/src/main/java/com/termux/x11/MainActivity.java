@@ -13,10 +13,12 @@ import android.app.ActivityOptions;
 import android.app.AppOpsManager;
 import android.app.PictureInPictureParams;
 import android.content.ClipData;
+import android.content.ComponentName;
 import android.content.Context;
 import android.content.ContextWrapper;
 import android.content.Intent;
 import android.content.pm.ActivityInfo;
+import android.content.pm.PackageManager;
 import android.content.res.Configuration;
 import android.content.res.Resources;
 import android.graphics.Bitmap;
@@ -148,13 +150,20 @@ public class MainActivity extends AppCompatActivity {
     private String tag = "";
     private boolean redirected;
 
+    /**
+     * The window tag carried by a launch Intent's data: either the host of a
+     * "termux-x11-window://<tag>" URI, or a bare schemeless value ("-d <tag>") used as the tag
+     * directly. Empty when the intent asks for the single untagged window.
+     */
+    private static String tagOf(Intent intent) {
+        Uri docData = intent == null ? null : intent.getData();
+        return docData != null && docData.getHost() != null ? docData.getHost()
+                : docData != null && docData.getScheme() == null ? docData.toString() : "";
+    }
+
     /** Redirects a tagged intent that landed on plain MainActivity to MainActivityTagged. Returns the parsed tag, or null if it relaunched. */
     private String relaunchAsTaggedIfNeeded(Intent intent, boolean finishSelf) {
-        // Tag comes from the launch Intent's data: either the host of a "termux-x11-window://<tag>"
-        // URI, or a bare schemeless value ("-d <tag>") used as the tag directly.
-        Uri docData = intent.getData();
-        String tag = docData != null && docData.getHost() != null ? docData.getHost()
-                : docData != null && docData.getScheme() == null ? docData.toString() : "";
+        String tag = tagOf(intent);
 
         if (tag.isEmpty() || this instanceof MainActivityTagged)
             return tag;
@@ -269,8 +278,37 @@ public class MainActivity extends AppCompatActivity {
     private void startTaggedActivity(Intent intent) {
         intent.setClass(this, MainActivityTagged.class)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+
+        ComponentName alias = aliasForTag(tagOf(intent));
+        if (alias != null)
+            intent.setComponent(alias);
+
         startActivity(intent, freeformActivityOptions());
     }
+
+    /**
+     * The activity alias that carries a tag's own name and icon, or null when the manifest
+     * declares none and the generic tagged activity should be used instead.
+     *
+     * Samsung DeX and One UI label a window's caption, taskbar entry and window list from the
+     * activity that owns the task and ignore setTaskDescription(), so without a separate alias
+     * every Linux app shows up as "Termux:X11". Aliases are generated from a spec directory by
+     * tools/lx-gen-aliases.sh; see that script for how to add one.
+     */
+    private ComponentName aliasForTag(String tag) {
+        if (tag == null || tag.isEmpty())
+            return null;
+
+        ComponentName alias = new ComponentName(this, ALIAS_PREFIX + tag.replaceAll("[^A-Za-z0-9_]", "_"));
+        try {
+            getPackageManager().getActivityInfo(alias, 0);
+            return alias;
+        } catch (PackageManager.NameNotFoundException e) {
+            return null;
+        }
+    }
+
+    private static final String ALIAS_PREFIX = "com.termux.x11.TaggedApp_";
 
     /** ActivityOptions requesting freeform windowing mode. */
     private static Bundle freeformActivityOptions() {

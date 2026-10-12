@@ -23,6 +23,23 @@ yet still opens normally.
 by `lx` whenever it launches an app. One UI ignores this, but it is what labels a window on
 other launchers and it costs nothing.
 
+**No title bar.** One UI draws a title bar above every freeform window and an app cannot remove
+it, but Android 15 lets an app ask for its background to be transparent with
+`APPEARANCE_TRANSPARENT_CAPTION_BAR_BACKGROUND`; the system then draws only the handle and the
+window buttons, over whatever the app puts there. Chrome uses this to seat its toolbar on that
+row, and `dumpsys window windows` shows the flag as `apr=80` on its window.
+
+Asking for it is not enough for an X server. The system composites the title bar strip over the
+window surface, and the SurfaceView holding the X picture punches a transparent hole in that
+surface, so the strip came out opaque black over the top of the Linux screen. The fix is
+`setZOrderOnTop(true)` so the picture is composited above the window surface too. The cost is
+that the extra key bar and the mouse helpers go behind the picture, so this hangs off the
+`transparentCaption` preference, on by default.
+
+The window buttons and the app handle still float over the top of the Linux screen and the
+system keeps input in that strip, so a drag there moves the window rather than reaching the
+Linux app.
+
 ## What One UI still does not honour
 
 The DeX taskbar groups every window of one package into a single entry and labels the whole
@@ -30,6 +47,9 @@ group from one member. With Zen Browser and Terminal both open, the taskbar show
 its window list calls both windows "Zen Browser". A per-app `taskAffinity` does not split the
 group; only separate packages would. Window captions, the DeX app overview and Recents are all
 correct.
+
+Samsung's `freeform_caption_type` global setting does nothing at any value from 0 to 3, and the
+`MW_CAPTION_*` names in SystemUI are log tags rather than toggles.
 
 ## Adding an app
 

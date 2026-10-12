@@ -8,6 +8,7 @@ import static android.view.WindowManager.LayoutParams.*;
 
 import android.Manifest;
 import android.annotation.SuppressLint;
+import android.app.ActivityManager;
 import android.app.ActivityOptions;
 import android.app.AppOpsManager;
 import android.app.PictureInPictureParams;
@@ -18,6 +19,8 @@ import android.content.Intent;
 import android.content.pm.ActivityInfo;
 import android.content.res.Configuration;
 import android.content.res.Resources;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
 import android.graphics.Rect;
 import android.graphics.RectF;
@@ -76,6 +79,9 @@ import com.termux.x11.utils.KeyInterceptor;
 import com.termux.x11.utils.TermuxX11ExtraKeys;
 import com.termux.x11.utils.X11ToolbarViewPager;
 
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileReader;
 import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -157,6 +163,52 @@ public class MainActivity extends AppCompatActivity {
             finish();
         startTaggedActivity(new Intent(intent));
         return null;
+    }
+
+
+    /**
+     * Gives a tagged window its own name and icon in Recents, the DeX taskbar and the task switcher.
+     * Without this every window is labelled with the application name, because Android takes the task
+     * label from the activity unless setTaskDescription() overrides it.
+     *
+     * The name comes from the launching intent's EXTRA_TITLE when present, otherwise from
+     * files/lx-tags/<tag>.name; the icon from files/lx-tags/<tag>.png. Both are optional: with neither,
+     * the tag itself is used as the label.
+     */
+    private void applyTaskDescription() {
+        if (tag.isEmpty())
+            return;
+
+        try {
+            String label = getIntent() != null ? getIntent().getStringExtra(Intent.EXTRA_TITLE) : null;
+            File dir = new File(getFilesDir(), "lx-tags");
+
+            if (label == null || label.isEmpty()) {
+                File nameFile = new File(dir, tag + ".name");
+                if (nameFile.canRead()) {
+                    try (BufferedReader r = new BufferedReader(new FileReader(nameFile))) {
+                        String line = r.readLine();
+                        if (line != null)
+                            label = line.trim();
+                    }
+                }
+            }
+            if (label == null || label.isEmpty())
+                label = tag.substring(0, 1).toUpperCase() + tag.substring(1);
+
+            Bitmap icon = null;
+            File iconFile = new File(dir, tag + ".png");
+            if (iconFile.canRead())
+                icon = BitmapFactory.decodeFile(iconFile.getAbsolutePath());
+            if (icon != null && (icon.getWidth() > 256 || icon.getHeight() > 256))
+                icon = Bitmap.createScaledBitmap(icon, 256, 256, true);
+
+            //noinspection deprecation - the Builder has no setIcon(Bitmap) counterpart.
+            setTaskDescription(icon != null ? new ActivityManager.TaskDescription(label, icon)
+                                            : new ActivityManager.TaskDescription(label));
+        } catch (Throwable t) {
+            Log.w("MainActivity", "could not set the task description for tag " + tag, t);
+        }
     }
 
     public String getTag() {
@@ -409,6 +461,7 @@ public class MainActivity extends AppCompatActivity {
         super.onNewIntent(intent);
         setIntent(intent);
         relaunchAsTaggedIfNeeded(intent, false);
+        applyTaskDescription();
     }
 
     @Override
@@ -812,6 +865,7 @@ public class MainActivity extends AppCompatActivity {
 
         app.onActivityResumed(this);
 
+        applyTaskDescription();
         orientationListener.enable();
         setTerminalToolbarView();
         getLorieView().requestFocus();

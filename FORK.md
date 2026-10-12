@@ -38,7 +38,10 @@ that the extra key bar and the mouse helpers go behind the picture, so this hang
 
 The window buttons and the app handle still float over the top of the Linux screen and the
 system keeps input in that strip, so a drag there moves the window rather than reaching the
-Linux app.
+Linux app. That is wrong for an app with its own controls in the top right, a browser above
+all, so one app can opt out: a `files/lx-tags/<tag>.titlebar` marker gives that window the
+ordinary title bar back. The `lx` dispatcher writes the marker for every id listed in
+`/etc/lx/titlebar`.
 
 ## What One UI still does not honour
 

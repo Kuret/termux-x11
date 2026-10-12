@@ -1128,12 +1128,29 @@ public class MainActivity extends AppCompatActivity {
      *
      * Only in multi-window mode, because that is where the title bar exists; a fullscreen window
      * would just end up underneath the status bar.
+     *
+     * The window buttons keep floating over the top right corner and the system keeps input in that
+     * strip, which is no good for an app that has its own controls up there, so a single app can opt
+     * out by having a files/lx-tags/<tag>.titlebar marker (written by the lx dispatcher from
+     * /etc/lx/titlebar) and get the ordinary title bar back.
      */
     private boolean drawsUnderCaption() {
         return prefs.transparentCaption.get()
                 && SDK_INT >= VERSION_CODES.VANILLA_ICE_CREAM
                 && !prefs.fullscreen.get()
-                && isInMultiWindowMode();
+                && isInMultiWindowMode()
+                && !wantsTitleBar();
+    }
+
+    /** Whether this window was marked as needing the title bar left alone. */
+    private boolean wantsTitleBar() {
+        if (tag.isEmpty())
+            return false;
+        try {
+            return new File(new File(getFilesDir(), "lx-tags"), tag + ".titlebar").exists();
+        } catch (Throwable t) {
+            return false;
+        }
     }
 
     private void applyImmersiveMode() {

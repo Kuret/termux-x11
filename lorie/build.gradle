@@ -24,7 +24,7 @@ def hostApplicationId = hostProject.android.defaultConfig.applicationId ?: hostP
 android {
     namespace 'com.termux.x11'
     //noinspection GrDeprecatedAPIUsage
-    compileSdkVersion 34
+    compileSdkVersion 35
     ndkVersion termuxX11NdkVersion
     defaultConfig {
         minSdkVersion 24
